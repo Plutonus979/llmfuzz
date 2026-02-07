@@ -1,0 +1,26 @@
+{
+  "schema_version": "llmfuzz.fuzzspec.v1",
+  "campaign_id": "example-minimal",
+  "target": {
+    "agent_id": "command",
+    "work_root_base": "/var/tmp/llmfuzz_work",
+    "command": ["python3", "-c", "print('ok')"]
+  },
+  "seed": {
+    "path": "/etc/hosts",
+    "media_type": "text/plain"
+  },
+  "mutations": {
+    "cases": 1
+  },
+  "execution": {
+    "work_root_mode": "per_run"
+  },
+  "outputs": {
+    "input_dir": "runs/<run_id>/input",
+    "out_dir": "runs/<run_id>/out",
+    "eval_dir": "runs/<run_id>/eval",
+    "llmfuzz_dir": "runs/<run_id>/llmfuzz"
+  }
+}
+

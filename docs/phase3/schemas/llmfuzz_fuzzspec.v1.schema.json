@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLMFuzz FuzzSpec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "campaign_id",
+    "target",
+    "seed",
+    "mutations",
+    "execution",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["llmfuzz.fuzzspec.v1"]
+    },
+    "campaign_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "seed": {
+      "$ref": "#/$defs/seed"
+    },
+    "mutations": {
+      "$ref": "#/$defs/mutations"
+    },
+    "execution": {
+      "$ref": "#/$defs/execution"
+    },
+    "outputs": {
+      "$ref": "#/$defs/outputs"
+    }
+  },
+  "$defs": {
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/"
+    },
+    "runRelativeTemplate": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/).+"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtime_root": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "work_root_base": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "engine_policy": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "run_agent_script": {
+          "$ref": "#/$defs/absolutePath"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["agent_id", "work_root_base", "command"]
+        }
+      ]
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "mutations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rng_seed": {
+          "type": "integer"
+        },
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_ops_per_case": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "work_root_mode": {
+          "type": "string",
+          "enum": ["per_run", "shared"],
+          "default": "per_run",
+          "description": "Reserved in v0.1; ignored by runtime. Non-default values emit warnings and may be rejected in strict mode."
+        },
+        "env_overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "PYTHONUNBUFFERED": {
+              "type": "string",
+              "enum": ["0", "1"]
+            }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["out_dir", "eval_dir"],
+      "properties": {
+        "input_dir": {
+          "$ref": "#/$defs/runRelativeTemplate",
+          "description": "Reserved in v0.1; ignored by runtime. Non-default values emit warnings and may be rejected in strict mode."
+        },
+        "out_dir": {
+          "$ref": "#/$defs/runRelativeTemplate",
+          "description": "Reserved in v0.1; ignored by runtime. Non-default values emit warnings and may be rejected in strict mode."
+        },
+        "eval_dir": {
+          "$ref": "#/$defs/runRelativeTemplate",
+          "description": "Reserved in v0.1; ignored by runtime. Non-default values emit warnings and may be rejected in strict mode."
+        },
+        "llmfuzz_dir": {
+          "$ref": "#/$defs/runRelativeTemplate",
+          "description": "Reserved in v0.1; ignored by runtime. Non-default values emit warnings and may be rejected in strict mode."
+        }
+      }
+    }
+  }
+}
+

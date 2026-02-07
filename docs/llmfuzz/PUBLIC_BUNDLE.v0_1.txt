@@ -1,0 +1,30 @@
+# LLMFuzz OSS public bundle (v0.1)
+#
+# Repo-relative globs used for extracting llmfuzz into a standalone public repo.
+#
+# Notes:
+# - Some artifacts remain in the original monorepo for LAB use, but are excluded from OSS.
+# - Adapters + baseline collector are INTERNAL ONLY and not shipped in OSS.
+#
+
+INCLUDE_GLOBS:
+- tools/llmfuzz/**
+- docs/phase3/schemas/llmfuzz_*.schema.json
+- docs/phase3/05_orchestrator_v1.md
+- docs/phase3/06_campaign_runner_v1.md
+- docs/phase3/06_fuzzspec_v1.md
+- docs/phase3/07_evaluator_v1.md
+- docs/phase3/08_triage_dedup_v1.md
+- docs/phase3/examples/fuzzspec_command_v1.json
+- docs/phase3/examples/fuzzspec_minimal.json
+- docs/phase3/examples/seeds/**
+- docs/llmfuzz/V0_1_CHECKPOINT.md
+- docs/llmfuzz/PUBLIC_BUNDLE.v0_1.txt
+
+EXCLUDE_GLOBS:
+- tools/llmfuzz/runner_adapters/**
+- tools/llmfuzz_baseline/**
+- docs/phase3/02_forensic_baseline.md
+- docs/phase3/baseline/**
+- docs/phase3/examples/fuzzspec_accounting_pdf.json
+- docs/phase3/examples/fuzzspec_broken.json

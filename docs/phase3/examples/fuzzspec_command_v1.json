@@ -1,0 +1,37 @@
+{
+  "schema_version": "llmfuzz.fuzzspec.v1",
+  "campaign_id": "example-command-v1",
+  "description": "Example for target.command (subprocess argv, no shell).",
+  "target": {
+    "agent_id": "command",
+    "work_root_base": "/tmp/llmfuzz_command_example",
+    "command": [
+      "python3",
+      "-c",
+      "import json,sys\nfrom pathlib import Path\ninp=Path(sys.argv[1])\nout=Path(sys.argv[2])\nout.mkdir(parents=True, exist_ok=True)\ndata=inp.read_bytes()\n(out/'result.json').write_text(json.dumps({'bytes': len(data)})+'\\n', encoding='utf-8')\nprint('OK bytes=%d'%len(data))\n",
+      "<input_path>",
+      "<out_dir>"
+    ],
+    "timeout_s": 30
+  },
+  "seed": {
+    "path": "/etc/hosts",
+    "media_type": "text/plain"
+  },
+  "mutations": {
+    "cases": 1
+  },
+  "execution": {
+    "work_root_mode": "per_run",
+    "env_overrides": {
+      "PYTHONUNBUFFERED": "1"
+    }
+  },
+  "outputs": {
+    "input_dir": "runs/<run_id>/input",
+    "out_dir": "runs/<run_id>/out",
+    "eval_dir": "runs/<run_id>/eval",
+    "llmfuzz_dir": "runs/<run_id>/llmfuzz"
+  }
+}
+

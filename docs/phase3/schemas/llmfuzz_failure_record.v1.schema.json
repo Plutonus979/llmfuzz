@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLMFuzz FailureRecord v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "campaign_id",
+    "artifact_id",
+    "input",
+    "spec_ref",
+    "mutation_ref",
+    "execution",
+    "observed_outputs",
+    "verdict",
+    "reason",
+    "timestamps"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "llmfuzz.failure_record.v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "campaign_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Authoritative id of the document under test; stable across attempts."
+    },
+    "input": {
+      "$ref": "#/$defs/ref"
+    },
+    "spec_ref": {
+      "$ref": "#/$defs/ref"
+    },
+    "mutation_ref": {
+      "$ref": "#/$defs/ref"
+    },
+    "execution": {
+      "$ref": "#/$defs/execution"
+    },
+    "observed_outputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL_INPUT_INVALID",
+        "FAIL_MISSING_OUTPUT",
+        "FAIL_SCHEMA_INVALID",
+        "FAIL_OUTPUT_MISMATCH",
+        "FAIL_EXCEPTION",
+        "BLOCKED_POLICY",
+        "TIMEOUT",
+        "NONDETERMINISM"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short explanation of the verdict; do not include stack traces."
+    },
+    "timestamps": {
+      "$ref": "#/$defs/timestamps"
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exit_code", "elapsed_ms"],
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stderr_tail": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "Optional truncated tail of stderr for quick context."
+        }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_utc", "finished_utc"],
+      "properties": {
+        "started_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_utc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
