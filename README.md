@@ -104,6 +104,7 @@ In v0.1, customization is done via `target.work_root_base`; the runtime ignores 
 
 ## Links / Further reading
 
+- Evidence Pack v0.1 (Accounting harness replay proof): docs/llmfuzz/evidence/v0_1/ (tag: llmfuzz-evidence-v0.1)
 - `docs/phase3/06_fuzzspec_v1.md`
 - `docs/phase3/05_orchestrator_v1.md`
 - `docs/phase3/07_evaluator_v1.md`
