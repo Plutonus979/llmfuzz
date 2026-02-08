@@ -1,0 +1,35 @@
+{
+  "schema_version": "llmfuzz.fuzzspec.v1",
+  "campaign_id": "evidence-pack-v0.1-accounting-harness",
+  "description": "Evidence Pack v0.1: Accounting harness run via target.command wrapper; commands.sh renders placeholders to absolute paths.",
+  "target": {
+    "engine": "command",
+    "agent_id": "__AGENT_ID__",
+    "work_root_base": "__WORK_ROOT_BASE__",
+    "command": [
+      "/usr/bin/python3",
+      "-c",
+      "import json,shutil,subprocess,sys\\nfrom pathlib import Path\\ninput_path=Path(sys.argv[1]).resolve(); out_dir=Path(sys.argv[2]).resolve(); runtime_root=Path(sys.argv[3]).resolve(); agent_id=str(sys.argv[4]); harness=Path(sys.argv[5]).resolve()\\ncmd=[sys.executable, str(harness), '--runtime-root', str(runtime_root), '--agent-id', agent_id, '--case-pdf', str(input_path)]\\nres=subprocess.run(cmd, shell=False)\\nout_dir.mkdir(parents=True, exist_ok=True)\\n# Ensure at least one JSON exists under <out_dir> for eval-run determinism.\\nharness_result=input_path.parent/'accounting_harness_result.json'\\nif harness_result.exists():\\n    shutil.copy2(harness_result, out_dir/'accounting_harness_result.json')\\nelse:\\n    (out_dir/'accounting_harness_result.json').write_text(json.dumps({'missing': str(harness_result)})+'\\\\n', encoding='utf-8')\\nraise SystemExit(int(res.returncode))\\n",
+      "<input_path>",
+      "<out_dir>",
+      "__RUNTIME_ROOT__",
+      "__AGENT_ID__",
+      "__HARNESS_PATH__"
+    ],
+    "timeout_s": 300
+  },
+  "seed": {
+    "path": "__SEED_PATH__",
+    "media_type": "application/pdf"
+  },
+  "mutations": {
+    "cases": 1,
+    "rng_seed": 1337
+  },
+  "execution": {
+    "env_overrides": {
+      "PYTHONUNBUFFERED": "1"
+    }
+  }
+}
+
