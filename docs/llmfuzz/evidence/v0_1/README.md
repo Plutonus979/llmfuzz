@@ -12,22 +12,30 @@ Given this repo at a specific commit and this evidence pack's inputs, running `c
 
 ## Reproduce (exact commands)
 
+Evidence Pack v0.1 depends on an external **Accounting** runtime + harness (provided via environment variables below). In contrast, the **Hello** quickstart is standalone and does not require Accounting.
+
 From repo root:
 
 ```bash
-cd /home/lab/work/agent-lab
+cd <REPO_ROOT>  # e.g. cd /path/to/llmfuzz
 bash docs/llmfuzz/evidence/v0_1/commands.sh
 ```
 
-Optional environment overrides (defaults are chosen to match the existing Accounting harness example spec shape):
+Optional environment overrides (paths are intentionally generic; override via env vars):
 
 ```bash
-cd /home/lab/work/agent-lab
-LLMFUZZ_EVIDENCE_RUNTIME_ROOT="/home/lab/agent/runtime/accounting" \
-LLMFUZZ_EVIDENCE_WORK_ROOT_BASE="/home/lab/agent/work/llmfuzz/evidence_pack_v0_1" \
+cd <REPO_ROOT>  # e.g. cd /path/to/llmfuzz
+LLMFUZZ_EVIDENCE_RUNTIME_ROOT="/path/to/accounting_runtime_root" \
+LLMFUZZ_EVIDENCE_HARNESS_PATH="/path/to/accounting_agent_harness_v1.py" \
+LLMFUZZ_EVIDENCE_WORK_ROOT_BASE="/tmp/llmfuzz_evidence_v0_1" \
 LLMFUZZ_EVIDENCE_AGENT_ID="parser_stub" \
 bash docs/llmfuzz/evidence/v0_1/commands.sh
 ```
+
+Notes:
+
+- The default `LLMFUZZ_EVIDENCE_WORK_ROOT_BASE` is `/tmp/llmfuzz_evidence_v0_1` (safe for a clean clone).
+- `LLMFUZZ_EVIDENCE_RUNTIME_ROOT` and `LLMFUZZ_EVIDENCE_HARNESS_PATH` are intentionally not hardcoded; provide your local Accounting runtime + harness paths via env vars.
 
 ## What to inspect
 

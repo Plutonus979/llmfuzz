@@ -10,11 +10,28 @@ RENDERED_SPEC="${HERE_DIR}/_rendered_fuzzspec.v0_1.json"
 PROVENANCE_PATH="${HERE_DIR}/provenance.v0_1.txt"
 SHA256SUMS_PATH="${HERE_DIR}/sha256sums.v0_1.txt"
 
-RUNTIME_ROOT="${LLMFUZZ_EVIDENCE_RUNTIME_ROOT:-/home/lab/agent/runtime/accounting}"
-WORK_ROOT_BASE="${LLMFUZZ_EVIDENCE_WORK_ROOT_BASE:-/home/lab/agent/work/llmfuzz/evidence_pack_v0_1}"
+RUNTIME_ROOT="${LLMFUZZ_EVIDENCE_RUNTIME_ROOT:-}"
+WORK_ROOT_BASE="${LLMFUZZ_EVIDENCE_WORK_ROOT_BASE:-/tmp/llmfuzz_evidence_v0_1}"
 AGENT_ID="${LLMFUZZ_EVIDENCE_AGENT_ID:-parser_stub}"
 
-HARNESS_PATH="${REPO_ROOT}/tools/llmfuzz/targets/accounting_agent_harness_v1.py"
+HARNESS_PATH="${LLMFUZZ_EVIDENCE_HARNESS_PATH:-}"
+
+if test -z "${RUNTIME_ROOT}"; then
+  echo "ERROR: LLMFUZZ_EVIDENCE_RUNTIME_ROOT is required (path to Accounting runtime root)" >&2
+  exit 2
+fi
+if ! test -d "${RUNTIME_ROOT}"; then
+  echo "ERROR: runtime root does not exist or is not a directory: ${RUNTIME_ROOT}" >&2
+  exit 2
+fi
+if test -z "${HARNESS_PATH}"; then
+  echo "ERROR: LLMFUZZ_EVIDENCE_HARNESS_PATH is required (path to accounting_agent_harness_v1.py)" >&2
+  exit 2
+fi
+if ! test -f "${HARNESS_PATH}"; then
+  echo "ERROR: harness path does not exist or is not a file: ${HARNESS_PATH}" >&2
+  exit 2
+fi
 
 RUN_ID_1="evidencepack_v0_1_run1"
 RUN_ID_2="evidencepack_v0_1_run2"
@@ -68,7 +85,7 @@ if not str(seed_path).startswith("/") or not seed_path.exists():
     raise SystemExit("render: seed path must exist and be absolute")
 PY
 
-python3 -m tools.llmfuzz validate --spec "${RENDERED_SPEC}"
+python3 -m llmfuzz validate --spec "${RENDERED_SPEC}"
 
 EXPECTED_RUN_DIR_1="${WORK_ROOT_BASE}/runs/${RUN_ID_1}"
 if test -e "${EXPECTED_RUN_DIR_1}"; then
@@ -76,7 +93,7 @@ if test -e "${EXPECTED_RUN_DIR_1}"; then
   exit 2
 fi
 
-RUN_OUTPUT_1="$(python3 -m tools.llmfuzz run --spec "${RENDERED_SPEC}" --case-index 0 --run-id "${RUN_ID_1}")"
+RUN_OUTPUT_1="$(python3 -m llmfuzz run --spec "${RENDERED_SPEC}" --case-index 0 --run-id "${RUN_ID_1}")"
 printf '%s\n' "${RUN_OUTPUT_1}" > "${HERE_DIR}/run1.output.txt"
 RUN_DIR_1="$(python3 -c 'import sys; print(sys.stdin.read().splitlines()[0].strip())' <<<"${RUN_OUTPUT_1}")"
 FAILURE_RECORD_1="$(python3 -c 'import sys; lines=sys.stdin.read().splitlines(); print(lines[1].strip() if len(lines)>1 else "")' <<<"${RUN_OUTPUT_1}")"
@@ -87,7 +104,7 @@ pp=pathlib.Path(p);
 assert pp.is_absolute(), f"run_dir not absolute: {p}"; 
 assert pp.exists() and pp.is_dir(), f"run_dir missing: {p}"' "${RUN_DIR_1}"
 
-python3 -m tools.llmfuzz eval-run --work-root-base "${WORK_ROOT_BASE}" --run-id "${RUN_ID_1}" >/dev/null
+python3 -m llmfuzz eval-run --work-root-base "${WORK_ROOT_BASE}" --run-id "${RUN_ID_1}" >/dev/null
 test -f "${RUN_DIR_1}/llmfuzz/eval.json"
 
 SIG_1="$(python3 -c 'import json,sys; p=sys.argv[1]; obj=json.load(open(p,"r",encoding="utf-8")); print(str(obj.get("signature_v1","")))' "${RUN_DIR_1}/llmfuzz/eval.json")"
@@ -98,7 +115,7 @@ if test -e "${EXPECTED_RUN_DIR_2}"; then
   exit 2
 fi
 
-RUN_OUTPUT_2="$(python3 -m tools.llmfuzz run --spec "${RENDERED_SPEC}" --case-index 0 --run-id "${RUN_ID_2}")"
+RUN_OUTPUT_2="$(python3 -m llmfuzz run --spec "${RENDERED_SPEC}" --case-index 0 --run-id "${RUN_ID_2}")"
 printf '%s\n' "${RUN_OUTPUT_2}" > "${HERE_DIR}/run2.output.txt"
 RUN_DIR_2="$(python3 -c 'import sys; print(sys.stdin.read().splitlines()[0].strip())' <<<"${RUN_OUTPUT_2}")"
 FAILURE_RECORD_2="$(python3 -c 'import sys; lines=sys.stdin.read().splitlines(); print(lines[1].strip() if len(lines)>1 else "")' <<<"${RUN_OUTPUT_2}")"
@@ -109,7 +126,7 @@ pp=pathlib.Path(p);
 assert pp.is_absolute(), f"run_dir not absolute: {p}"; 
 assert pp.exists() and pp.is_dir(), f"run_dir missing: {p}"' "${RUN_DIR_2}"
 
-python3 -m tools.llmfuzz eval-run --work-root-base "${WORK_ROOT_BASE}" --run-id "${RUN_ID_2}" >/dev/null
+python3 -m llmfuzz eval-run --work-root-base "${WORK_ROOT_BASE}" --run-id "${RUN_ID_2}" >/dev/null
 test -f "${RUN_DIR_2}/llmfuzz/eval.json"
 
 SIG_2="$(python3 -c 'import json,sys; p=sys.argv[1]; obj=json.load(open(p,"r",encoding="utf-8")); print(str(obj.get("signature_v1","")))' "${RUN_DIR_2}/llmfuzz/eval.json")"
