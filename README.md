@@ -21,10 +21,11 @@ pip install .
 ## 60-second Quickstart
 
 This repo ships runnable example specs in `docs/phase3/examples/`.
+The default hello quickstart target is self-contained (pure Python) and does not require any external Accounting/LAB runtime.
 
 ```bash
 # From the repo root
-SPEC="docs/phase3/examples/fuzzspec_command_v1.json"
+SPEC="docs/phase3/examples/fuzzspec_quickstart_hello_command.json"
 
 llmfuzz validate --spec "$SPEC"
 

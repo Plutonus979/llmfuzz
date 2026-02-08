@@ -1,0 +1,37 @@
+{
+  "schema_version": "llmfuzz.fuzzspec.v1",
+  "campaign_id": "quickstart-hello-command",
+  "description": "Quickstart: self-contained hello target (argv command, no shell). Writes deterministic hello_result.json.",
+  "target": {
+    "agent_id": "command",
+    "engine": "command",
+    "work_root_base": "/tmp/llmfuzz_quickstart",
+    "command": [
+      "python3",
+      "-c",
+      "import hashlib,json,sys\nfrom pathlib import Path\ninp=Path(sys.argv[1])\nout=Path(sys.argv[2])\nout.mkdir(parents=True, exist_ok=True)\ndata=inp.read_bytes()\n(out/'hello_result.json').write_text(json.dumps({'byte_length': len(data), 'sha256': hashlib.sha256(data).hexdigest()}, sort_keys=True)+'\\n', encoding='utf-8')\n",
+      "<input_path>",
+      "<out_dir>"
+    ],
+    "timeout_s": 30
+  },
+  "seed": {
+    "path": "docs/phase3/examples/seeds/seed.txt",
+    "media_type": "text/plain"
+  },
+  "mutations": {
+    "cases": 1
+  },
+  "execution": {
+    "work_root_mode": "per_run",
+    "env_overrides": {
+      "PYTHONUNBUFFERED": "1"
+    }
+  },
+  "outputs": {
+    "input_dir": "runs/<run_id>/input",
+    "out_dir": "runs/<run_id>/out",
+    "eval_dir": "runs/<run_id>/eval",
+    "llmfuzz_dir": "runs/<run_id>/llmfuzz"
+  }
+}
