@@ -6,3 +6,32 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Test/runtime artifacts (do not commit)
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Common tool caches
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Work roots / runs (llmfuzz writes under a configurable work root)
+runs/
+work_root_base/
+
+# Secrets / local env
+.env
+.env.*
+*.env
+keys/
+*.pem
+*.key
+*.p12
+*.crt
+*.der
+
+# Logs
+logs/
+*.log

@@ -2,6 +2,12 @@
 
 `llmfuzz` is a **command-driven fuzz / eval / triage tool** for LLM-agent-style targets (or any target you can invoke as a command). It runs one case or a small campaign, writes **deterministic, inspectable artifacts** under a work root, and supports deterministic evaluation + campaign triage. **v0.1 is intentionally minimal**: OSS runs use `target.command` (argv, no shell) and focus on a stable on-disk contract.
 
+## Governance
+
+- This project is public but centrally governed.
+- PRs may be reviewed selectively; there is no obligation to merge.
+- Safety: `llmfuzz` executes user-configured commands and is not a sandbox (run targets in a container/VM).
+
 ## Install (editable)
 
 - Python **>= 3.11**
