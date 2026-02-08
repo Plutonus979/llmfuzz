@@ -1,13 +1,12 @@
 {
   "evidence_pack_version": "0.1",
-  "repo_commit": "",
-  "created_at_utc": "",
-  "spec_sha256": "",
-  "seed_sha256": "",
+  "repo_commit": "c01c6a1b9d7d72246e2c8a9e8509f22bc3b3ea53",
+  "created_at_utc": "2026-02-08T09:33:23Z",
+  "spec_sha256": "80db6925ff1fe816efedaf4c334ad2938454f6afd388da02bc50e357958c8f87",
+  "seed_sha256": "4d01fd7a9d23c3c70e7670bc848c3cb368bd47fee708c4fdccb2a8a982b47d93",
   "expected": {
-    "signature_v1": "",
-    "verdict": ""
+    "signature_v1": "CRASH:0f974193fc225557",
+    "verdict": "FAIL"
   },
-  "notes": ""
+  "notes": "Accounting harness; deterministic replay over two independent runs."
 }
-
