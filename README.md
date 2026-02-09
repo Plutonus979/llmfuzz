@@ -12,6 +12,15 @@
 
 - Python **>= 3.11**
 
+PyPI install:
+
+```bash
+pip install plutonus-llmfuzz
+```
+
+Note: The PyPI distribution is named `plutonus-llmfuzz` due to name availability.
+The CLI and Python import remain `llmfuzz`.
+
 Editable install (recommended for development):
 
 ```bash
