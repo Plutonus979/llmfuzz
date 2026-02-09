@@ -417,16 +417,18 @@ def validate_spec(raw: dict) -> FuzzSpec:
     execution_raw = _validate_keys(
         top_level["execution"],
         {"work_root_mode", "env_overrides"},
-        ("work_root_mode",),
+        (),
         "execution",
     )
 
-    work_root_mode = _require_string(
-        execution_raw["work_root_mode"],
-        "execution.work_root_mode",
-    )
-    if work_root_mode not in _ALLOWED_WORK_ROOT_MODES:
-        _fail("execution.work_root_mode", "must be one of per_run, shared")
+    work_root_mode = _DEFAULT_WORK_ROOT_MODE
+    if "work_root_mode" in execution_raw:
+        work_root_mode = _require_string(
+            execution_raw["work_root_mode"],
+            "execution.work_root_mode",
+        )
+        if work_root_mode not in _ALLOWED_WORK_ROOT_MODES:
+            _fail("execution.work_root_mode", "must be one of per_run, shared")
 
     env_overrides = None
     if "env_overrides" in execution_raw:

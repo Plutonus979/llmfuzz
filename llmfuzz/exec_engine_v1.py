@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -140,6 +141,18 @@ def run_command_target(
     error: dict[str, str] | None = None
 
     try:
+        argv0 = str(argv[0])
+        if "/" in argv0 or "\\" in argv0:
+            if not Path(argv0).is_absolute():
+                raise ValueError("argv[0] must be an absolute path")
+        else:
+            controlled_path = "/bin:/usr/bin:/usr/local/bin"
+            resolved = shutil.which(argv0, path=controlled_path)
+            if not resolved:
+                raise ValueError(
+                    f"argv[0] did not resolve in controlled PATH ({controlled_path}): {argv0}"
+                )
+            argv[0] = str(resolved)
         result = subprocess.run(
             argv,
             cwd=str(run_dir),
