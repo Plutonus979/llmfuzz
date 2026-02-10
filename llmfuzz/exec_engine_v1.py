@@ -144,11 +144,13 @@ def run_command_target(
         argv0 = str(argv[0])
         if "/" in argv0 or "\\" in argv0:
             argv0_path = Path(argv0)
-            if not argv0_path.is_absolute():
+            if argv0_path.is_absolute():
+                pass
+            else:
                 resolved_path = (run_dir / argv0_path).resolve()
                 if not resolved_path.exists():
                     raise ValueError(f"argv[0] did not exist relative to run_dir: {argv0}")
-            argv[0] = str(resolved_path)
+                argv[0] = str(resolved_path)
 
         else:
             controlled_path = "/usr/local/bin:/usr/bin:/bin"
