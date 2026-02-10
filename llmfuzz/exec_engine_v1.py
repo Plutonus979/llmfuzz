@@ -143,10 +143,15 @@ def run_command_target(
     try:
         argv0 = str(argv[0])
         if "/" in argv0 or "\\" in argv0:
-            if not Path(argv0).is_absolute():
-                raise ValueError("argv[0] must be an absolute path")
+            argv0_path = Path(argv0)
+            if not argv0_path.is_absolute():
+                resolved_path = (run_dir / argv0_path).resolve()
+                if not resolved_path.exists():
+                    raise ValueError(f"argv[0] did not exist relative to run_dir: {argv0}")
+            argv[0] = str(resolved_path)
+
         else:
-            controlled_path = "/bin:/usr/bin:/usr/local/bin"
+            controlled_path = "/usr/local/bin:/usr/bin:/bin"
             resolved = shutil.which(argv0, path=controlled_path)
             if not resolved:
                 raise ValueError(

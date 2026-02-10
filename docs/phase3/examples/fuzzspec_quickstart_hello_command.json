@@ -17,7 +17,7 @@
   },
   "seed": {
     "path": "/tmp/llmfuzz_quickstart/seed.json",
-    "media_type": "text/plain"
+    "media_type": "application/json"
   },
   "mutations": {
     "cases": 1
