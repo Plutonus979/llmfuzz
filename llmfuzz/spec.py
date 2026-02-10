@@ -13,6 +13,7 @@ from .mutations import ALLOWED_OPS
 from .command_allowlist import (
     ALLOWED_COMMAND_ROOTS as _ALLOWED_COMMAND_ROOTS,
     ALLOWED_COMMAND_USR_LOCAL as _ALLOWED_COMMAND_USR_LOCAL,
+    ALLOWED_ABS_EXEC_ROOTS as _ALLOWED_ABS_EXEC_ROOTS,
     CONTROLLED_PATH as _CONTROLLED_PATH,
 )
 
@@ -211,7 +212,8 @@ def _is_relative_to(child: Path, parent: Path) -> bool:
 
 def _validate_command_executable(argv: Tuple[str, ...], path: str) -> None:
     argv0 = str(argv[0])
-    if "/" in argv0 or "\\" in argv0:
+    explicit_path = "/" in argv0 or "\\" in argv0
+    if explicit_path:
         exe_path = _parse_abs_path(argv0, f"{path}[0]")
     else:
         which_path = _CONTROLLED_PATH
@@ -227,6 +229,8 @@ def _validate_command_executable(argv: Tuple[str, ...], path: str) -> None:
         _fail(f"{path}[0]", "must resolve to a file")
     if not os.access(resolved, os.X_OK):
         _fail(f"{path}[0]", "must be executable")
+    if explicit_path and not any(_is_relative_to(resolved, root) for root in _ALLOWED_ABS_EXEC_ROOTS):
+        _fail(f"{path}[0]", "executable not allowlisted")
     if any(_is_relative_to(resolved, root) for root in _ALLOWED_COMMAND_ROOTS):
         return
     if _is_relative_to(resolved, _ALLOWED_COMMAND_USR_LOCAL):
@@ -236,6 +240,8 @@ def _validate_command_executable(argv: Tuple[str, ...], path: str) -> None:
             _fail(f"{path}[0]", "must be executable")
         if mode & (stat.S_IWGRP | stat.S_IWOTH):
             _fail(f"{path}[0]", "must not be group/world-writable")
+        return
+    if explicit_path and any(_is_relative_to(resolved, root) for root in _ALLOWED_ABS_EXEC_ROOTS):
         return
     _fail(f"{path}[0]", "executable not allowlisted")
 

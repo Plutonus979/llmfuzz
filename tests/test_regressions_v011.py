@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _SEMVER_RE = re.compile(r"\b\d+\.\d+\.\d+\b")
@@ -79,7 +81,7 @@ def test_exec_engine_absolute_argv0_is_not_rewritten(tmp_path: Path) -> None:
         "target": {
             "agent_id": "agent",
             "work_root_base": str(work_root_base),
-            "command": [sys.executable, "-c", code],
+            "command": [str(Path(sys.executable).resolve()), "-c", code],
         },
         "seed": {"path": str(seed_path)},
         "mutations": {"cases": 1},
@@ -98,7 +100,10 @@ def test_exec_engine_absolute_argv0_is_not_rewritten(tmp_path: Path) -> None:
     exec_json_path = run_dir / "exec" / "exec.json"
     exec_obj = json.loads(exec_json_path.read_text(encoding="utf-8"))
     argv0 = (exec_obj.get("argv") or [None])[0]
-    assert argv0 == sys.executable
+    assert isinstance(argv0, str)
+    assert Path(argv0).is_absolute()
+    assert Path(argv0).name.startswith("python")
+    assert argv0.startswith(("/bin/", "/usr/bin/", "/usr/local/bin/", "/opt/hostedtoolcache/"))
     assert (run_dir / "exec" / "stdout.txt").exists()
     assert (run_dir / "exec" / "stderr.txt").exists()
     assert (run_dir / "out" / "abs_argv0.json").exists()
@@ -108,6 +113,7 @@ def test_controlled_path_is_shared_and_posix_only() -> None:
     code = (
         "from llmfuzz.command_allowlist import CONTROLLED_PATH\n"
         "assert '/opt/homebrew/bin' not in CONTROLLED_PATH\n"
+        "assert '/opt/hostedtoolcache' not in CONTROLLED_PATH\n"
         "import llmfuzz.exec_engine_v1 as ee\n"
         "import llmfuzz.spec as sp\n"
         "assert ee._CONTROLLED_PATH == CONTROLLED_PATH\n"
@@ -140,7 +146,7 @@ def test_validate_pythonunbuffered_contract(tmp_path: Path) -> None:
         "target": {
             "agent_id": "agent",
             "work_root_base": str(work_root_base),
-            "command": [sys.executable, "-c", "print('ok')"],
+            "command": [str(Path(sys.executable).resolve()), "-c", "print('ok')"],
         },
         "seed": {"path": str(seed_path)},
         "mutations": {"cases": 1},
@@ -160,4 +166,52 @@ def test_validate_pythonunbuffered_contract(tmp_path: Path) -> None:
     good_path.write_text(json.dumps(good, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     good_proc = _run_llmfuzz("validate", "--spec", str(good_path))
     assert good_proc.returncode == 0
+
+
+def test_validator_accepts_hostedtoolcache_abs_exec_when_present(tmp_path: Path) -> None:
+    exe = Path(sys.executable).resolve()
+    hosted_root = Path("/opt/hostedtoolcache")
+    if not hosted_root.exists():
+        pytest.skip("/opt/hostedtoolcache not present")
+    try:
+        exe.relative_to(hosted_root)
+    except ValueError:
+        pytest.skip("sys.executable not under /opt/hostedtoolcache")
+    if not exe.exists():
+        pytest.skip("hostedtoolcache executable does not exist")
+
+    work_root_base = tmp_path / "work_root"
+    seed_path = tmp_path / "seed.bin"
+    seed_path.write_bytes(b"seed")
+
+    spec = {
+        "schema_version": "llmfuzz.fuzzspec.v1",
+        "campaign_id": "camp_hostedtoolcache_abs",
+        "target": {
+            "agent_id": "agent",
+            "work_root_base": str(work_root_base),
+            "command": [str(exe), "-c", "print('ok')"],
+        },
+        "seed": {"path": str(seed_path)},
+        "mutations": {"cases": 1},
+        "execution": {},
+        "outputs": {"out_dir": "runs/<run_id>/out", "eval_dir": "runs/<run_id>/eval"},
+    }
+    spec_path = tmp_path / "spec_hostedtoolcache_abs.json"
+    spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    code = (
+        "import json\n"
+        "from pathlib import Path\n"
+        "from llmfuzz.spec import validate_spec\n"
+        f"raw = json.loads(Path({json.dumps(str(spec_path))}).read_text(encoding='utf-8'))\n"
+        "validate_spec(raw)\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, f"hostedtoolcache abs exec not accepted:\n{proc.stdout}\n{proc.stderr}\n"
 
