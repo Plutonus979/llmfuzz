@@ -90,6 +90,7 @@ Required fields:
 Optional:
 
 - `seed.media_type` (string): e.g., `"application/pdf"`. Informational.
+- `seed.sha256` (string): optional SHA-256 hex digest of the seed file; MUST match `^[0-9a-fA-F]{64}$`.
 
 ### `mutations`
 
@@ -106,6 +107,16 @@ Optional:
   - Semantics: hard limit on output length; the engine MUST clamp to `max_bytes` after mutations. If `max_bytes` is less than `len(seed_bytes)`, the output is truncated to `max_bytes`.
 - `mutations.max_ops_per_case` (integer, \(\>= 0\))
   - Semantics: hard limit on the number of mutation operations per case. `0` means no-op (no mutations), only clamp if `max_bytes` is set. If omitted, the default limit is 1.
+- `mutations.strategies` (array of strings): optional allowlist of mutation ops; each item MUST be one of `flip_bit`, `flip_byte`, `truncate_tail`, `append_bytes`.
+
+Example snippet (optional fields only):
+
+```json
+{
+  "seed": { "sha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "mutations": { "strategies": ["flip_bit", "flip_byte"] }
+}
+```
 
 Note: If `mutations.rng_seed` is not set, the default per-case seed is `case_index` (deterministic). If `mutations.max_bytes` is not set, the limit is unbounded.
 

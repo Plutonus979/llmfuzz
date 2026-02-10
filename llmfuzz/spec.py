@@ -10,14 +10,17 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from .mutations import ALLOWED_OPS
+from .command_allowlist import (
+    ALLOWED_COMMAND_ROOTS as _ALLOWED_COMMAND_ROOTS,
+    ALLOWED_COMMAND_USR_LOCAL as _ALLOWED_COMMAND_USR_LOCAL,
+    CONTROLLED_PATH as _CONTROLLED_PATH,
+)
 
 SCHEMA_VERSION = "llmfuzz.fuzzspec.v1"
 _ALLOWED_WORK_ROOT_MODES = {"per_run", "shared"}
 _ALLOWED_ENV_KEYS = {"PYTHONUNBUFFERED"}
 _OUTPUT_TOKEN_RE = re.compile(r"<[^>]+>")
 _HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
-_ALLOWED_COMMAND_ROOTS = (Path("/bin"), Path("/usr/bin"))
-_ALLOWED_COMMAND_USR_LOCAL = Path("/usr/local/bin")
 _DEFAULT_WORK_ROOT_MODE = "per_run"
 _DEFAULT_OUTPUT_TEMPLATES = {
     "input_dir": "runs/<run_id>/input",
@@ -211,7 +214,7 @@ def _validate_command_executable(argv: Tuple[str, ...], path: str) -> None:
     if "/" in argv0 or "\\" in argv0:
         exe_path = _parse_abs_path(argv0, f"{path}[0]")
     else:
-        which_path = ":".join([*(str(p) for p in _ALLOWED_COMMAND_ROOTS), str(_ALLOWED_COMMAND_USR_LOCAL)])
+        which_path = _CONTROLLED_PATH
         resolved_str = shutil.which(argv0, path=which_path)
         if not resolved_str:
             _fail(f"{path}[0]", "must resolve to an allowlisted executable")
@@ -446,6 +449,8 @@ def validate_spec(raw: dict) -> FuzzSpec:
                 _fail(f"execution.env_overrides.{key}", "not allowlisted")
             if not isinstance(value, str):
                 _fail(f"execution.env_overrides.{key}", "must be a string")
+            if key == "PYTHONUNBUFFERED" and value not in ("0", "1"):
+                _fail(f"execution.env_overrides.{key}", 'must be "0" or "1"')
             env_overrides[key] = value
 
     execution = ExecutionSpec(

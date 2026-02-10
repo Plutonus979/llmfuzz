@@ -14,6 +14,38 @@ from .evaluator_v1 import eval_run_v1
 from .triage_dedup_v1 import triage_campaign_v1
 
 
+def _get_version() -> str:
+    try:
+        from importlib import metadata
+    except Exception:
+        metadata = None  # type: ignore[assignment]
+
+    if metadata is not None:
+        try:
+            return str(metadata.version("plutonus-llmfuzz"))
+        except Exception:
+            pass
+
+    try:
+        import tomllib
+
+        here = Path(__file__).resolve()
+        repo_root = here.parents[2]
+        pyproject = repo_root / "pyproject.toml"
+        if not pyproject.exists():
+            pyproject = here.parents[1] / "pyproject.toml"
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        project = data.get("project")
+        if isinstance(project, dict):
+            v = project.get("version")
+            if isinstance(v, str) and v:
+                return v
+    except Exception:
+        pass
+
+    return "unknown"
+
+
 def _stub(phase_session):
     print(f"Not implemented (Phase 3 Session {phase_session})")
     raise SystemExit(2)
@@ -152,6 +184,7 @@ def _handle_triage_campaign(args):
 
 def _build_parser():
     parser = argparse.ArgumentParser(prog="llmfuzz")
+    parser.add_argument("--version", action="version", version=_get_version())
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     validate_parser = subparsers.add_parser("validate", help="Validate inputs")
