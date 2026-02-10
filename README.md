@@ -42,6 +42,9 @@ The default hello quickstart target is self-contained (pure Python) and does not
 # From the repo root
 SPEC="docs/phase3/examples/fuzzspec_quickstart_hello_command.json"
 
+mkdir -p /tmp/llmfuzz_quickstart
+printf '%s\n' '{"hello":"llmfuzz quickstart"}' > /tmp/llmfuzz_quickstart/seed.json
+
 llmfuzz validate --spec "$SPEC"
 
 # run-one prints two lines:

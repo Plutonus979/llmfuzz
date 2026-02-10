@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -140,6 +141,25 @@ def run_command_target(
     error: dict[str, str] | None = None
 
     try:
+        argv0 = str(argv[0])
+        if "/" in argv0 or "\\" in argv0:
+            argv0_path = Path(argv0)
+            if argv0_path.is_absolute():
+                pass
+            else:
+                resolved_path = (run_dir / argv0_path).resolve()
+                if not resolved_path.exists():
+                    raise ValueError(f"argv[0] did not exist relative to run_dir: {argv0}")
+                argv[0] = str(resolved_path)
+
+        else:
+            controlled_path = "/usr/local/bin:/usr/bin:/bin"
+            resolved = shutil.which(argv0, path=controlled_path)
+            if not resolved:
+                raise ValueError(
+                    f"argv[0] did not resolve in controlled PATH ({controlled_path}): {argv0}"
+                )
+            argv[0] = str(resolved)
         result = subprocess.run(
             argv,
             cwd=str(run_dir),

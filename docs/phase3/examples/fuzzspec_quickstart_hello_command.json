@@ -16,8 +16,8 @@
     "timeout_s": 30
   },
   "seed": {
-    "path": "docs/phase3/examples/seeds/seed.txt",
-    "media_type": "text/plain"
+    "path": "/tmp/llmfuzz_quickstart/seed.json",
+    "media_type": "application/json"
   },
   "mutations": {
     "cases": 1
