@@ -51,13 +51,27 @@ def _get_spec_sha256(campaign_root: Path) -> str:
     return ""
 
 
+def _infer_work_root_base_from_campaign_root(campaign_root: Path) -> Path:
+    for p in (campaign_root, *campaign_root.parents):
+        try:
+            if (p / "runs").is_dir():
+                return p
+        except Exception:
+            continue
+    return campaign_root
+
+
 def _load_eval_fallback(campaign_root: Path, run_id: str) -> dict | None:
     if not run_id:
         return None
-    path = campaign_root / "runs" / run_id / "llmfuzz" / "eval.json"
-    if not path.exists():
-        return None
-    return _read_json_object(path)
+    legacy = campaign_root / "runs" / run_id / "llmfuzz" / "eval.json"
+    if legacy.exists():
+        return _read_json_object(legacy)
+    work_root_base = _infer_work_root_base_from_campaign_root(campaign_root)
+    path = work_root_base / "runs" / run_id / "llmfuzz" / "eval.json"
+    if path.exists():
+        return _read_json_object(path)
+    return None
 
 
 def triage_campaign_v1(

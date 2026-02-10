@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from .command_allowlist import CONTROLLED_PATH as _CONTROLLED_PATH
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -151,15 +152,13 @@ def run_command_target(
                 if not resolved_path.exists():
                     raise ValueError(f"argv[0] did not exist relative to run_dir: {argv0}")
                 argv[0] = str(resolved_path)
-
         else:
-            controlled_path = "/usr/local/bin:/usr/bin:/bin"
-            resolved = shutil.which(argv0, path=controlled_path)
+            resolved = shutil.which(argv0, path=_CONTROLLED_PATH)
             if not resolved:
                 raise ValueError(
-                    f"argv[0] did not resolve in controlled PATH ({controlled_path}): {argv0}"
+                    f"argv[0] did not resolve in controlled PATH ({_CONTROLLED_PATH}): {argv0}"
                 )
-            argv[0] = str(resolved)
+            argv[0] = str(resolved)         
         result = subprocess.run(
             argv,
             cwd=str(run_dir),
@@ -231,4 +230,3 @@ def run_command_target(
         error=dict(error) if error is not None else None,
         exec_json=exec_json,
     )
-

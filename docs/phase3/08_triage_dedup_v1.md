@@ -13,7 +13,7 @@ Cluster key is:
 
 ## Where it writes artifacts
 
-Writing is exclusively under:
+Triage artifacts are written under:
 
 `<work_root_base>/llmfuzz/campaigns/<campaign_id>/triage/`
 
@@ -21,6 +21,10 @@ Artifacts:
 
 - `triage/triage.json` (always)
 - `triage/triage.md` (if `--write-md true`)
+
+Optional side-effect (if `--patch-summary true` and `summary.json` exists):
+
+- patches `<work_root_base>/llmfuzz/campaigns/<campaign_id>/summary.json`
 
 ## Example command
 

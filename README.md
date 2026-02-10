@@ -1,4 +1,4 @@
-#  llmfuzz v0.1.0
+#  llmfuzz v0.1.1
 
 `llmfuzz` is a **command-driven fuzz / eval / triage tool** for LLM-agent-style targets (or any target you can invoke as a command). It runs one case or a small campaign, writes **deterministic, inspectable artifacts** under a work root, and supports deterministic evaluation + campaign triage. **v0.1 is intentionally minimal**: OSS runs use `target.command` (argv, no shell) and focus on a stable on-disk contract.
 
@@ -133,7 +133,7 @@ In v0.1, customization is done via `target.work_root_base`; the runtime ignores 
 ## Release
 
 ```bash
-git tag -a v0.1.0 -m "llmfuzz v0.1.0"
+git tag -a v0.1.1 -m "llmfuzz v0.1.1"
 git push --tags
 
 # Optional sanity check:

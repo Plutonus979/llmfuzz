@@ -1,6 +1,6 @@
 # LLMFuzz Orchestrator v1
 
-Note: v0.1 is supported on POSIX/WSL environments; Windows is not guaranteed.
+Note: v0.1 is supported on Linux (and WSL2 best-effort); Windows is not guaranteed.
 
 ## Canonical run layout
 
