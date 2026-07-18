@@ -24,6 +24,7 @@ from .io import _utc_now_iso, atomic_write_bytes, atomic_write_json, atomic_writ
 from .mutations import apply_mutations, generate_case, mutations_to_jsonl
 from .spec import (
     FuzzSpec,
+    ValidationError,
     collect_reserved_field_warnings,
     load_spec,
     validate_spec,
@@ -479,6 +480,8 @@ def run_case(
 ) -> OrchestratorResult:
     raw = load_spec(str(spec_path))
     spec = validate_spec(raw)
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise ValidationError("timeout_seconds: must be greater than 0")
     if emit_warnings:
         fields = collect_reserved_field_warnings(spec)
         if fields:

@@ -171,6 +171,66 @@ def test_run_case_timeout_precedence(
     assert captured_timeouts == [expected_timeout]
 
 
+@pytest.mark.parametrize("timeout_seconds", [0, -1])
+def test_run_case_rejects_non_positive_timeout_before_artifacts(
+    tmp_path: Path,
+    timeout_seconds: int,
+) -> None:
+    spec_path, work_root_base = _write_minimal_spec(tmp_path, timeout_s=17.0)
+
+    with pytest.raises(ValidationError, match="timeout_seconds: must be greater than 0"):
+        orchestrator_v1.run_case(
+            spec_path,
+            case_index=0,
+            run_id="invalid_timeout",
+            dry_run=False,
+            timeout_seconds=timeout_seconds,
+        )
+
+    assert not work_root_base.exists()
+
+
+@pytest.mark.parametrize("timeout_s", ["0", "-1"])
+def test_campaign_cli_rejects_non_positive_timeout_before_artifacts(
+    tmp_path: Path,
+    timeout_s: str,
+) -> None:
+    spec_path, work_root_base = _write_minimal_spec(tmp_path, timeout_s=17.0)
+
+    proc = _run_llmfuzz(
+        "campaign",
+        "--spec",
+        str(spec_path),
+        "--cases",
+        "1",
+        "--exec",
+        "--timeout-s",
+        timeout_s,
+    )
+
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+    assert proc.stderr.strip() == "timeout_s: must be greater than 0"
+    assert not work_root_base.exists()
+
+
+def test_campaign_cli_accepts_positive_timeout(tmp_path: Path) -> None:
+    spec_path, work_root_base = _write_minimal_spec(tmp_path, timeout_s=17.0)
+
+    proc = _run_llmfuzz(
+        "campaign",
+        "--spec",
+        str(spec_path),
+        "--cases",
+        "1",
+        "--timeout-s",
+        "1",
+    )
+
+    assert proc.returncode == 0, f"campaign failed:\n{proc.stdout}\n{proc.stderr}\n"
+    assert work_root_base.exists()
+
+
 def test_run_case_rejects_missing_command_before_creating_work_root(tmp_path: Path) -> None:
     spec_path, work_root_base = _write_minimal_spec(tmp_path, include_command=False)
 
