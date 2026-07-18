@@ -25,6 +25,11 @@ classifiers = [
 [project.scripts]
 llmfuzz = "llmfuzz.cli:main"
 
+[project.optional-dependencies]
+openai = [
+  "openai>=2.46.0,<3",
+]
+
 [tool.setuptools]
 package-dir = {"" = "."}
 
