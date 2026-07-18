@@ -4,6 +4,7 @@ import json
 import os
 import random
 import string
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,16 +55,40 @@ def atomic_write_text(path: str | os.PathLike[str], text: str) -> None:
     os.replace(tmp_path, path)
 
 
-def atomic_write_bytes(path: str | os.PathLike[str], data: bytes) -> None:
+def atomic_write_bytes(
+    path: str | os.PathLike[str],
+    data: bytes,
+    *,
+    overwrite: bool = True,
+) -> None:
     path = os.fspath(path)
     parent = os.path.dirname(path) or "."
     os.makedirs(parent, exist_ok=True)
-    tmp_path = _temp_path_for(path)
-    with open(tmp_path, "wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp_path, path)
+    fd = -1
+    tmp_path: str | None = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(prefix=f".tmp.{os.getpid()}.", dir=parent)
+        handle = os.fdopen(fd, "wb")
+        fd = -1
+        with handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if overwrite:
+            os.replace(tmp_path, path)
+        else:
+            os.link(tmp_path, path)
+    finally:
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 def atomic_write_json(path: str | os.PathLike[str], obj: Any) -> None:
