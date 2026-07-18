@@ -3,12 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import sys
-import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -23,10 +20,11 @@ from .classify import (
     Timestamps,
 )
 from .exec_engine_v1 import run_command_target
-from .io import atomic_write_bytes, atomic_write_json, atomic_write_text, sha256_file
+from .io import _utc_now_iso, atomic_write_bytes, atomic_write_json, atomic_write_text, sha256_file
 from .mutations import apply_mutations, generate_case, mutations_to_jsonl
 from .spec import (
     FuzzSpec,
+    ValidationError,
     collect_reserved_field_warnings,
     load_spec,
     validate_spec,
@@ -88,10 +86,6 @@ class OrchestratorResult:
     run_dir: Path
     failure_record_path: Path
     failure_record: dict
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -175,10 +169,6 @@ def _spec_to_canonical_dict(spec: FuzzSpec) -> dict:
     if spec.outputs.llmfuzz_dir is not None:
         out["outputs"]["llmfuzz_dir"] = spec.outputs.llmfuzz_dir
     return out
-
-
-def resolve_adapter(spec: FuzzSpec):
-    raise ValueError("Adapters are not shipped in OSS. Use target.command.")
 
 
 def _policy_fingerprint(path: Path) -> str | None:
@@ -341,86 +331,6 @@ def _write_exec_v01_artifacts(
     atomic_write_json(str(exec_json_path), exec_obj)
 
 
-def _coerce_text(value: object) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
-
-
-def execute_target(
-    layout: RunLayout,
-    spec: FuzzSpec,
-    *,
-    timeout_seconds_override: int | None = None,
-) -> ExecResult:
-    adapter = resolve_adapter(spec)
-    cmd = adapter.build_cmd(spec)
-    env_subset = adapter.build_env(spec, layout.run_id)
-    env_subset.update(
-        {
-            "LLMFUZZ_RUN_ID": layout.run_id,
-            "LLMFUZZ_RUN_DIR": str(layout.run_dir),
-            "LLMFUZZ_INPUT_PATH": str(layout.input_pdf_path),
-            "LLMFUZZ_OUT_DIR": str(layout.out_dir),
-        }
-    )
-    if spec.execution.env_overrides:
-        env_subset.update(spec.execution.env_overrides)
-    env = os.environ.copy()
-    env.update(env_subset)
-
-    started_utc = _utc_now_iso()
-    started = time.time()
-    timeout_seconds = int(
-        timeout_seconds_override
-        if timeout_seconds_override is not None
-        else adapter.timeout_seconds(spec)
-    )
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(layout.run_dir),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_seconds,
-            env=env,
-        )
-        timeout = False
-        exit_code = result.returncode
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
-    except subprocess.TimeoutExpired as exc:
-        timeout = True
-        exit_code = -1
-        stdout = _coerce_text(exc.stdout)
-        stderr = _coerce_text(exc.stderr)
-    elapsed_seconds = time.time() - started
-    finished_utc = _utc_now_iso()
-
-    exec_result = ExecResult(
-        cmd=list(cmd),
-        cwd=str(layout.run_dir),
-        env_subset=dict(env_subset),
-        timeout_seconds=timeout_seconds,
-        exit_code=exit_code,
-        timeout=timeout,
-        elapsed_seconds=elapsed_seconds,
-        stdout=stdout,
-        stderr=stderr,
-        started_utc=started_utc,
-        finished_utc=finished_utc,
-        skipped=False,
-    )
-    _write_exec_artifacts(layout, exec_result)
-    return exec_result
-
-
 def collect_observed_outputs(layout: RunLayout, *, agent_id: str) -> list[ObservedFile]:
     observed: list[ObservedFile] = []
     run_dir = layout.run_dir
@@ -570,6 +480,8 @@ def run_case(
 ) -> OrchestratorResult:
     raw = load_spec(str(spec_path))
     spec = validate_spec(raw)
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise ValidationError("timeout_seconds: must be greater than 0")
     if emit_warnings:
         fields = collect_reserved_field_warnings(spec)
         if fields:
@@ -631,7 +543,11 @@ def run_case(
     )
 
     if spec.target.command is not None:
-        timeout_s_eff = float(spec.target.timeout_s) if spec.target.timeout_s is not None else 30.0
+        timeout_s_eff = (
+            float(timeout_seconds)
+            if timeout_seconds is not None
+            else float(spec.target.timeout_s) if spec.target.timeout_s is not None else 30.0
+        )
         if dry_run:
             env_subset = {
                 "LLMFUZZ_RUN_ID": layout.run_id,
@@ -704,53 +620,7 @@ def run_case(
             )
             _write_exec_artifacts(layout, exec_result)
     else:
-        adapter = resolve_adapter(spec)
-        if dry_run:
-            cmd = adapter.build_cmd(spec)
-            env_subset = adapter.build_env(spec, layout.run_id)
-            env_subset.update(
-                {
-                    "LLMFUZZ_RUN_ID": layout.run_id,
-                    "LLMFUZZ_RUN_DIR": str(layout.run_dir),
-                    "LLMFUZZ_INPUT_PATH": str(layout.input_pdf_path),
-                    "LLMFUZZ_OUT_DIR": str(layout.out_dir),
-                }
-            )
-            if spec.execution.env_overrides:
-                env_subset.update(spec.execution.env_overrides)
-            timeout_seconds_eff = int(
-                timeout_seconds
-                if timeout_seconds is not None
-                else adapter.timeout_seconds(spec)
-            )
-            exec_result = ExecResult(
-                cmd=list(cmd),
-                cwd=str(layout.run_dir),
-                env_subset=dict(env_subset),
-                timeout_seconds=timeout_seconds_eff,
-                exit_code=0,
-                timeout=False,
-                elapsed_seconds=0.0,
-                stdout="",
-                stderr="",
-                started_utc=_utc_now_iso(),
-                finished_utc=_utc_now_iso(),
-                skipped=True,
-            )
-            _write_exec_artifacts(layout, exec_result)
-            _write_exec_v01_artifacts(
-                layout,
-                exec_result,
-                error={"type": "DryRun", "message": "dry_run"},
-            )
-        else:
-            exec_result = execute_target(
-                layout,
-                spec,
-                timeout_seconds_override=timeout_seconds,
-            )
-            _write_exec_artifacts(layout, exec_result)
-            _write_exec_v01_artifacts(layout, exec_result, error=None)
+        raise ValueError("target.command is required (adapters are not shipped in OSS)")
 
     observed = collect_observed_outputs(layout, agent_id=spec.target.agent_id)
     record = build_failure_record(spec, layout, exec_result, observed)

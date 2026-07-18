@@ -36,3 +36,4 @@ keys/
 logs/
 *.log
 .venv-build/
+/WORKTREE_DIFF.md

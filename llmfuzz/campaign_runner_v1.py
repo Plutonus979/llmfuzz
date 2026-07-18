@@ -5,18 +5,13 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .io import atomic_write_json, sha256_file
+from .io import _utc_now_iso, atomic_write_json, sha256_file
 from .orchestrator_v1 import run_case
 from .evaluator_v1 import eval_run_v1
-from .spec import collect_reserved_field_warnings, load_spec, validate_spec
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+from .spec import ValidationError, collect_reserved_field_warnings, load_spec, validate_spec
 
 
 def compute_spec_sha256(spec_path: Path) -> str:
@@ -337,6 +332,9 @@ def run_campaign(
     stop_on: str | None = None,
     resume: bool = False,
 ) -> CampaignResult:
+    if timeout_s is not None and timeout_s <= 0:
+        raise ValidationError("timeout_s: must be greater than 0")
+
     spec_path = Path(spec_path)
     raw = load_spec(str(spec_path))
     spec = validate_spec(raw)
