@@ -6,24 +6,11 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from .command_allowlist import CONTROLLED_PATH as _CONTROLLED_PATH
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _decode_text(value: object) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
+from .io import _utc_now_iso, decode_text as _decode_text
 
 
 def _resolve_placeholders(s: str, mapping: Mapping[str, str]) -> str:

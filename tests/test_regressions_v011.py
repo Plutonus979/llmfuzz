@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_REPO_ROOT))
+
+import llmfuzz.orchestrator_v1 as orchestrator_v1
+from llmfuzz.io import atomic_write_bytes, atomic_write_json, atomic_write_text, decode_text
+from llmfuzz.spec import ValidationError
 
 _SEMVER_RE = re.compile(r"\b\d+\.\d+\.\d+\b")
 
@@ -20,6 +27,162 @@ def _run_llmfuzz(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+def _write_minimal_spec(
+    tmp_path: Path,
+    *,
+    timeout_s: float | None = None,
+    include_command: bool = True,
+) -> tuple[Path, Path]:
+    work_root_base = tmp_path / "work_root"
+    seed_path = tmp_path / "seed.bin"
+    seed_path.write_bytes(b"seed")
+    target: dict[str, object] = {
+        "agent_id": "agent",
+        "work_root_base": str(work_root_base),
+    }
+    if include_command:
+        target["command"] = [str(Path(sys.executable).resolve()), "-c", "print('ok')"]
+        if timeout_s is not None:
+            target["timeout_s"] = timeout_s
+    spec = {
+        "schema_version": "llmfuzz.fuzzspec.v1",
+        "campaign_id": "camp_regression",
+        "target": target,
+        "seed": {"path": str(seed_path)},
+        "mutations": {"cases": 1},
+        "execution": {},
+        "outputs": {"out_dir": "runs/<run_id>/out", "eval_dir": "runs/<run_id>/eval"},
+    }
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return spec_path, work_root_base
+
+
+def test_atomic_writes_accept_str_path_and_path_objects(tmp_path: Path) -> None:
+    text_str_path = str(tmp_path / "text-str.txt")
+    text_path = tmp_path / "text-path.txt"
+    bytes_str_path = str(tmp_path / "bytes-str.bin")
+    bytes_path = tmp_path / "bytes-path.bin"
+
+    atomic_write_text(text_str_path, "text str\n")
+    atomic_write_text(text_path, "text path\n")
+    atomic_write_bytes(bytes_str_path, b"bytes str\n")
+    atomic_write_bytes(bytes_path, b"bytes path\n")
+
+    assert Path(text_str_path).read_bytes() == b"text str\n"
+    assert text_path.read_bytes() == b"text path\n"
+    assert Path(bytes_str_path).read_bytes() == b"bytes str\n"
+    assert bytes_path.read_bytes() == b"bytes path\n"
+
+    json_path = tmp_path / "object.json"
+    atomic_write_json(json_path, {"b": 1, "a": "é"})
+    assert json_path.read_bytes() == '{\n  "a": "é",\n  "b": 1\n}\n'.encode("utf-8")
+
+
+def test_atomic_writes_use_fspath_and_reject_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class DivergentPathLike(os.PathLike[str]):
+        def __init__(self, actual: Path, misleading: Path) -> None:
+            self.actual = actual
+            self.misleading = misleading
+
+        def __fspath__(self) -> str:
+            return str(self.actual)
+
+        def __str__(self) -> str:
+            return str(self.misleading)
+
+    text_actual = tmp_path / "text-actual.txt"
+    text_misleading = tmp_path / "text-misleading.txt"
+    bytes_actual = tmp_path / "bytes-actual.bin"
+    bytes_misleading = tmp_path / "bytes-misleading.bin"
+
+    atomic_write_text(DivergentPathLike(text_actual, text_misleading), "actual\n")
+    atomic_write_bytes(DivergentPathLike(bytes_actual, bytes_misleading), b"actual\n")
+
+    assert text_actual.read_bytes() == b"actual\n"
+    assert bytes_actual.read_bytes() == b"actual\n"
+    assert not text_misleading.exists()
+    assert not bytes_misleading.exists()
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(TypeError):
+        atomic_write_text(None, "invalid")
+    with pytest.raises(TypeError):
+        atomic_write_bytes(None, b"invalid")
+    assert not (tmp_path / "None").exists()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, ""),
+        ("already text", "already text"),
+        ("snowman ☃".encode(), "snowman ☃"),
+        (b"malformed:\xff", "malformed:�"),
+        (42, "42"),
+    ],
+)
+def test_decode_text_preserves_coercion_contract(value: object, expected: str) -> None:
+    assert decode_text(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("timeout_override", "spec_timeout", "expected_timeout"),
+    [(3, 17.0, 3.0), (None, 17.0, 17.0)],
+)
+def test_run_case_timeout_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    timeout_override: int | None,
+    spec_timeout: float,
+    expected_timeout: float,
+) -> None:
+    spec_path, _ = _write_minimal_spec(tmp_path, timeout_s=spec_timeout)
+    captured_timeouts: list[float] = []
+
+    def fake_run_command_target(**kwargs: object) -> SimpleNamespace:
+        captured_timeouts.append(float(kwargs["timeout_s"]))
+        return SimpleNamespace(
+            argv=list(kwargs["argv_template"]),
+            cwd=str(kwargs["run_dir"]),
+            injected_env={},
+            timed_out=False,
+            exit_code=0,
+            stdout_text="",
+            stderr_text="",
+            started_at="2026-07-18T00:00:00Z",
+            ended_at="2026-07-18T00:00:00Z",
+            duration_ms=0,
+        )
+
+    monkeypatch.setattr(orchestrator_v1, "run_command_target", fake_run_command_target)
+    orchestrator_v1.run_case(
+        spec_path,
+        case_index=0,
+        run_id="timeout_precedence",
+        dry_run=False,
+        timeout_seconds=timeout_override,
+    )
+
+    assert captured_timeouts == [expected_timeout]
+
+
+def test_run_case_rejects_missing_command_before_creating_work_root(tmp_path: Path) -> None:
+    spec_path, work_root_base = _write_minimal_spec(tmp_path, include_command=False)
+
+    with pytest.raises(ValidationError, match="Adapters are not shipped in OSS"):
+        orchestrator_v1.run_case(
+            spec_path,
+            case_index=0,
+            run_id="missing_command",
+            dry_run=False,
+        )
+
+    assert not work_root_base.exists()
 
 
 def test_triage_eval_fallback_reads_work_root_runs(tmp_path: Path) -> None:
@@ -214,4 +377,3 @@ def test_validator_accepts_hostedtoolcache_abs_exec_when_present(tmp_path: Path)
         text=True,
     )
     assert proc.returncode == 0, f"hostedtoolcache abs exec not accepted:\n{proc.stdout}\n{proc.stderr}\n"
-
