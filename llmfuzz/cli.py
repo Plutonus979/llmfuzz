@@ -1,4 +1,6 @@
 import argparse
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -11,7 +13,18 @@ from .spec import (
 from .orchestrator_v1 import run_case
 from .campaign_runner_v1 import run_campaign
 from .evaluator_v1 import eval_run_v1
+from .redteam_corpus import MAX_CASE_COUNT, MIN_CASE_COUNT
+from .redteam_generation import (
+    MAX_OUTPUT_TOKENS,
+    BudgetState,
+    GenerationError,
+    GenerationResult,
+    generate_and_persist_corpus,
+)
 from .triage_dedup_v1 import triage_campaign_v1
+
+
+_REDTEAM_DEFAULT_CASE_COUNT = 16
 
 
 def _get_version() -> str:
@@ -182,6 +195,137 @@ def _handle_triage_campaign(args):
     return 0
 
 
+def _create_redteam_provider():
+    from .redteam_openai import create_openai_provider
+
+    return create_openai_provider()
+
+
+def _redteam_error_message(error: GenerationError) -> str:
+    try:
+        code = error.code
+    except Exception:
+        code = "provider_error"
+    return str(GenerationError(code if isinstance(code, str) else "provider_error"))
+
+
+def _redteam_local_error(args) -> GenerationError | None:
+    if args.cases < MIN_CASE_COUNT or args.cases > MAX_CASE_COUNT:
+        return GenerationError("invalid_configuration")
+    if args.max_output_tokens < 1 or args.max_output_tokens > MAX_OUTPUT_TOKENS:
+        return GenerationError("invalid_configuration")
+    try:
+        if not args.output or "\0" in args.output:
+            return GenerationError("destination_invalid")
+        destination = Path(args.output)
+        if os.path.lexists(destination):
+            return GenerationError("destination_exists")
+        ancestor = destination.parent
+        while not os.path.lexists(ancestor):
+            parent = ancestor.parent
+            if parent == ancestor:
+                break
+            ancestor = parent
+        if os.path.lexists(ancestor):
+            if not ancestor.is_dir():
+                return GenerationError("destination_invalid")
+            mode = os.W_OK | os.X_OK
+            if os.access in os.supports_effective_ids:
+                writable = os.access(ancestor, mode, effective_ids=True) is True
+            else:
+                writable = os.access(ancestor, mode) is True
+            if not writable:
+                return GenerationError("destination_invalid")
+    except Exception:
+        return GenerationError("destination_invalid")
+    return None
+
+
+def _redteam_success_output(result: GenerationResult) -> str:
+    evidence = result.evidence
+    return json.dumps(
+        {
+            "actual_estimated_cost_usd": (
+                None
+                if evidence.actual_estimated_cost_usd is None
+                else str(evidence.actual_estimated_cost_usd)
+            ),
+            "attempts_consumed": evidence.attempts_consumed,
+            "corpus_path": str(result.path),
+            "corpus_sha256": result.corpus.corpus_sha256,
+            "generated_case_count": len(result.corpus.cases),
+            "input_tokens": evidence.actual_input_tokens,
+            "output_tokens": evidence.actual_output_tokens,
+            "reserved_maximum_cost_usd": str(evidence.reserved_maximum_cost_usd),
+            "total_tokens": evidence.actual_total_tokens,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def _handle_redteam_generate(args):
+    local_error = _redteam_local_error(args)
+    if local_error is not None:
+        print(f"redteam generate: {local_error}", file=sys.stderr)
+        raise SystemExit(2)
+
+    provider = None
+    initialization_error: str | None = None
+    try:
+        provider = _create_redteam_provider()
+    except GenerationError as exc:
+        initialization_error = _redteam_error_message(exc)
+    except Exception:
+        initialization_error = "OpenAI provider initialization failed."
+    if initialization_error is not None:
+        print(f"redteam generate: {initialization_error}", file=sys.stderr)
+        raise SystemExit(1)
+
+    primary_error: str | None = None
+    output: str | None = None
+    cleanup_failed = False
+    try:
+        try:
+            result = generate_and_persist_corpus(
+                provider=provider,
+                path=args.output,
+                case_count=args.cases,
+                max_output_tokens=args.max_output_tokens,
+                budget_state=BudgetState(),
+            )
+            output = _redteam_success_output(result)
+        except GenerationError as exc:
+            primary_error = _redteam_error_message(exc)
+        except Exception:
+            primary_error = "Red Team corpus generation failed."
+    finally:
+        primary_active = sys.exception() is not None
+        try:
+            provider.close()
+        except BaseException as cleanup_error:
+            if primary_active:
+                pass
+            elif isinstance(cleanup_error, Exception):
+                cleanup_failed = True
+            else:
+                raise
+
+    if primary_error is not None:
+        print(f"redteam generate: {primary_error}", file=sys.stderr)
+        raise SystemExit(1)
+    if cleanup_failed:
+        print("redteam generate: OpenAI provider cleanup failed.", file=sys.stderr)
+        raise SystemExit(1)
+    if output is None:
+        print("redteam generate: Red Team corpus generation failed.", file=sys.stderr)
+        raise SystemExit(1)
+    print(output)
+    return 0
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="llmfuzz")
     parser.add_argument("--version", action="version", version=_get_version())
@@ -237,6 +381,37 @@ def _build_parser():
 
     replay_parser = subparsers.add_parser("replay", help="Replay run")
     replay_parser.set_defaults(handler=lambda _args: _stub(5))
+
+    redteam_parser = subparsers.add_parser("redteam", help="Red Team corpus operations")
+    redteam_subparsers = redteam_parser.add_subparsers(
+        dest="redteam_command",
+        required=True,
+    )
+    generate_parser = redteam_subparsers.add_parser(
+        "generate",
+        help="Generate and persist an adversarial corpus",
+    )
+    generate_parser.add_argument(
+        "--output",
+        required=True,
+        help="New corpus JSON destination",
+    )
+    generate_parser.add_argument(
+        "--cases",
+        type=int,
+        default=_REDTEAM_DEFAULT_CASE_COUNT,
+        help=(
+            f"Case count ({MIN_CASE_COUNT}-{MAX_CASE_COUNT}; "
+            f"default: {_REDTEAM_DEFAULT_CASE_COUNT})"
+        ),
+    )
+    generate_parser.add_argument(
+        "--max-output-tokens",
+        type=int,
+        default=MAX_OUTPUT_TOKENS,
+        help=f"Maximum output tokens (1-{MAX_OUTPUT_TOKENS}; default: {MAX_OUTPUT_TOKENS})",
+    )
+    generate_parser.set_defaults(handler=_handle_redteam_generate)
 
     return parser
 

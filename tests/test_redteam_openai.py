@@ -120,13 +120,32 @@ class FakeClient:
 
 
 class FakeHttpClient:
-    def __init__(self, *, trust_env: bool, verify: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        trust_env: bool,
+        verify: bool = True,
+        close_error: BaseException | None = None,
+    ) -> None:
         self.trust_env = trust_env
         self.verify = verify
         self.closed = False
+        self.close_calls = 0
+        self.close_error = close_error
 
     def close(self) -> None:
+        self.close_calls += 1
         self.closed = True
+        if self.close_error is not None:
+            raise self.close_error
+
+
+class FactoryInterruption(BaseException):
+    pass
+
+
+class CleanupInterruption(BaseException):
+    pass
 
 
 def _request(max_output_tokens: int = 4096) -> GenerationRequest:
@@ -501,6 +520,137 @@ def test_factory_initialization_error_is_sanitized(capsys: pytest.CaptureFixture
     assert captured.out == ""
     assert captured.err == ""
     assert http_client.closed is True
+
+
+def test_http_client_factory_exception_is_sanitized_without_client_construction(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    marker = SECRET_MARKER
+    client_calls: list[dict[str, object]] = []
+
+    def fail_transport(**_kwargs: object) -> object:
+        raise RuntimeError(marker)
+
+    with pytest.raises(GenerationError) as exc_info:
+        create_openai_provider(
+            environ={"OPENAI_API_KEY": marker},
+            client_factory=lambda **kwargs: client_calls.append(kwargs),
+            http_client_factory=fail_transport,
+        )
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == "provider_initialization"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert client_calls == []
+    assert marker not in str(exc_info.value) + captured.out + captured.err
+
+
+@pytest.mark.parametrize(
+    "failure_factory",
+    (
+        pytest.param(lambda: KeyboardInterrupt(), id="keyboard_interrupt"),
+        pytest.param(lambda: SystemExit(73), id="system_exit"),
+        pytest.param(lambda: FactoryInterruption(), id="custom_base_exception"),
+    ),
+)
+def test_http_client_factory_base_exception_propagates_without_client_construction(
+    capsys: pytest.CaptureFixture[str],
+    failure_factory: object,
+) -> None:
+    client_calls: list[dict[str, object]] = []
+    assert callable(failure_factory)
+    interruption = failure_factory()
+
+    def fail_transport(**_kwargs: object) -> object:
+        raise interruption
+
+    with pytest.raises(type(interruption)) as exc_info:
+        create_openai_provider(
+            environ={"OPENAI_API_KEY": "synthetic-key"},
+            client_factory=lambda **kwargs: client_calls.append(kwargs),
+            http_client_factory=fail_transport,
+        )
+
+    captured = capsys.readouterr()
+    assert exc_info.value is interruption
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert client_calls == []
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize(
+    "construction_factory",
+    (
+        pytest.param(lambda marker: RuntimeError(marker), id="runtime_error"),
+        pytest.param(lambda _marker: KeyboardInterrupt(), id="keyboard_interrupt"),
+        pytest.param(lambda _marker: SystemExit(73), id="system_exit"),
+        pytest.param(
+            lambda _marker: FactoryInterruption(),
+            id="custom_base_exception",
+        ),
+    ),
+)
+@pytest.mark.parametrize(
+    "cleanup_factory",
+    (
+        pytest.param(lambda _marker: None, id="close_success"),
+        pytest.param(lambda marker: RuntimeError(marker), id="runtime_error"),
+        pytest.param(lambda _marker: KeyboardInterrupt(), id="keyboard_interrupt"),
+        pytest.param(lambda _marker: SystemExit(74), id="system_exit"),
+        pytest.param(
+            lambda marker: CleanupInterruption(marker),
+            id="custom_base_exception",
+        ),
+    ),
+)
+def test_client_factory_failure_always_closes_transport_without_replacing_primary(
+    capsys: pytest.CaptureFixture[str],
+    construction_factory: object,
+    cleanup_factory: object,
+) -> None:
+    marker = SECRET_MARKER
+    assert callable(construction_factory)
+    assert callable(cleanup_factory)
+    construction_error = construction_factory(marker)
+    cleanup_error = cleanup_factory(marker)
+    transport = FakeHttpClient(
+        trust_env=False,
+        close_error=cleanup_error,
+    )
+
+    def fail_client(**_kwargs: object) -> object:
+        raise construction_error
+
+    if isinstance(construction_error, Exception):
+        with pytest.raises(GenerationError) as exc_info:
+            create_openai_provider(
+                environ={"OPENAI_API_KEY": marker},
+                client_factory=fail_client,
+                http_client_factory=lambda **_kwargs: transport,
+            )
+        assert exc_info.value.code == "provider_initialization"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__context__ is None
+        public_error: BaseException = exc_info.value
+    else:
+        with pytest.raises(type(construction_error)) as exc_info:
+            create_openai_provider(
+                environ={"OPENAI_API_KEY": marker},
+                client_factory=fail_client,
+                http_client_factory=lambda **_kwargs: transport,
+            )
+        assert exc_info.value is construction_error
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__context__ is None
+        public_error = exc_info.value
+
+    captured = capsys.readouterr()
+    assert transport.close_calls == 1
+    assert transport.closed is True
+    assert marker not in str(public_error) + captured.out + captured.err
 
 
 def test_http_client_cleanup_failure_does_not_escape_initialization_error() -> None:

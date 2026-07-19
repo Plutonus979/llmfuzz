@@ -12,6 +12,10 @@
 - Later scope changes require an explicit, documented scope revision.
 - This document locks intended work; it does not claim that the Build Week delta is already implemented.
 
+This v1 document remains authoritative except where superseded by
+`llmfuzz-red-team-scope-amendment.v1_1.md`. The ACTIVE amendment governs aggregate
+attempt and budget-state requirements.
+
 The canonical pitch is: LLMFuzz Red Team uses GPT-5.6 to generate bounded semantic
 adversarial corpora for local AI agents, while deterministic invariants—not an LLM
 judge—produce replayable, evidence-backed verdicts suitable for regression testing and CI.

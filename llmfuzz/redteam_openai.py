@@ -16,6 +16,15 @@ OPENAI_TIMEOUT_SECONDS = 60.0
 _ALLOWED_OPENAI_ENVIRONMENT = frozenset({"OPENAI_API_KEY"})
 
 
+def _close_transport_best_effort(transport: object) -> None:
+    try:
+        close = getattr(transport, "close", None)
+        if callable(close):
+            close()
+    except BaseException:
+        pass
+
+
 def _exception_code(exc: Exception) -> tuple[str, bool]:
     name = exc.__class__.__name__
     try:
@@ -204,10 +213,16 @@ def create_openai_provider(
             client_factory = OpenAI
         if http_client_factory is None:
             http_client_factory = DefaultHttpxClient
-    initialization_failed = False
-    http_client: object | None = None
+    transport_failed = False
     try:
         http_client = http_client_factory(trust_env=False)
+    except Exception:
+        transport_failed = True
+    if transport_failed:
+        raise GenerationError("provider_initialization")
+
+    initialization_failed = False
+    try:
         client = client_factory(
             api_key=api_key,
             base_url=OPENAI_API_BASE_URL,
@@ -217,13 +232,10 @@ def create_openai_provider(
         )
     except Exception:
         initialization_failed = True
+    except BaseException:
+        _close_transport_best_effort(http_client)
+        raise
     if initialization_failed:
-        if http_client is not None:
-            try:
-                close = getattr(http_client, "close", None)
-                if callable(close):
-                    close()
-            except Exception:
-                pass
+        _close_transport_best_effort(http_client)
         raise GenerationError("provider_initialization")
     return OpenAIResponsesProvider(client)
