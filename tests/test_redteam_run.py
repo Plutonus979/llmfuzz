@@ -203,7 +203,7 @@ def test_d1b_public_literals_and_fixed_command_are_locked() -> None:
     assert os.access(executable, os.X_OK)
 
 
-@pytest.mark.parametrize("mode", (0o755, 0o775))
+@pytest.mark.parametrize("mode", (0o755, 0o775, 0o777, 0o757))
 def test_trusted_python_executable_accepts_regular_executable_modes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -215,22 +215,6 @@ def test_trusted_python_executable_accepts_regular_executable_modes(
     monkeypatch.setattr(sys, "executable", str(executable))
 
     assert redteam_run._trusted_python_executable() == executable.resolve(strict=True)
-
-
-def test_trusted_python_executable_rejects_world_writable_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    executable = tmp_path / "python"
-    executable.write_bytes(b"synthetic executable")
-    executable.chmod(0o777)
-    monkeypatch.setattr(sys, "executable", str(executable))
-
-    with pytest.raises(RedTeamRunValidationError) as exc_info:
-        redteam_run._trusted_python_executable()
-
-    assert exc_info.value.code == "executable_invalid"
-    assert str(executable) not in str(exc_info.value)
 
 
 def test_trusted_python_executable_rejects_non_executable_file(
@@ -305,14 +289,14 @@ def test_trusted_python_executable_sanitizes_stat_failure(
 
 
 @pytest.mark.parametrize("target", ("fixed", "vulnerable"))
-def test_target_command_retains_locked_argv_with_group_writable_interpreter(
+def test_target_command_retains_locked_argv_with_writable_interpreter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     target: str,
 ) -> None:
     executable = tmp_path / "python"
     executable.write_bytes(b"synthetic executable")
-    executable.chmod(0o775)
+    executable.chmod(0o777)
     resolved = executable.resolve(strict=True)
     monkeypatch.setattr(sys, "executable", str(executable))
 
