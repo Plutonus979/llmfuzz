@@ -1,1 +1,2 @@
 include llmfuzz/py.typed
+include llmfuzz/data/*.json

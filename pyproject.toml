@@ -38,4 +38,4 @@ where = ["."]
 include = ["llmfuzz*"]
 
 [tool.setuptools.package-data]
-llmfuzz = ["py.typed"]
+llmfuzz = ["py.typed", "data/*.json"]

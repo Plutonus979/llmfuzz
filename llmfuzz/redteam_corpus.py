@@ -7,6 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from importlib import resources
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -15,6 +16,9 @@ from .io import atomic_write_bytes
 
 CORPUS_SCHEMA_VERSION = "llmfuzz.redteam.corpus.v1"
 CASE_SCHEMA_VERSION = "llmfuzz.redteam.case.v1"
+ACCEPTED_CORPUS_SHA256 = "9dd6f3675d18926610ea4b8da2f580dd48b52cb1e9002cce1198df6961167140"
+
+_ACCEPTED_CORPUS_RESOURCE = ("data", "accepted-corpus.v1.json")
 
 ATTACK_CLASSES = (
     "prompt injection",
@@ -456,4 +460,13 @@ def load_corpus(path: str | os.PathLike[str]) -> Corpus:
         _fail("corpus.corpus_sha256", "does not match canonical payload")
     if data != canonical_persisted_bytes(corpus):
         _fail("corpus", "file is not in canonical persisted form")
+    return corpus
+
+
+def load_bundled_accepted_corpus() -> Corpus:
+    resource = resources.files("llmfuzz").joinpath(*_ACCEPTED_CORPUS_RESOURCE)
+    with resources.as_file(resource) as path:
+        corpus = load_corpus(path)
+    if not hmac.compare_digest(corpus.corpus_sha256, ACCEPTED_CORPUS_SHA256):
+        _fail("bundled corpus", "identity does not match the accepted corpus")
     return corpus
