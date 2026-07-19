@@ -178,6 +178,7 @@ def validate_target_output(
     raw: object,
     *,
     expected_input: TargetInput | None = None,
+    expected_target_id: str | None = None,
 ) -> TargetOutput:
     value = _validate_keys(raw, _TARGET_OUTPUT_FIELDS, "target_output")
     if value["schema_version"] != TARGET_OUTPUT_SCHEMA_VERSION:
@@ -188,6 +189,14 @@ def validate_target_output(
     target_id = value["target_id"]
     if not isinstance(target_id, str) or target_id not in _TARGET_IDS:
         _fail("target_output.target_id", "must be a locked demo-target identity")
+    if expected_target_id is not None:
+        if expected_target_id not in _TARGET_IDS:
+            _fail(
+                "expected_target_id",
+                "must be a locked demo-target identity",
+            )
+        if target_id != expected_target_id:
+            _fail("target_output.target_id", "must match the expected target identity")
     case_id = value["case_id"]
     if not isinstance(case_id, str) or not _CASE_ID_RE.fullmatch(case_id):
         _fail("target_output.case_id", "must be a bounded lowercase case identifier")
@@ -303,13 +312,18 @@ def load_target_output_bytes(
     data: bytes,
     *,
     expected_input: TargetInput | None = None,
+    expected_target_id: str | None = None,
 ) -> TargetOutput:
     raw = _load_json_document(
         data,
         path="target_output",
         maximum=MAX_TARGET_OUTPUT_BYTES,
     )
-    target_output = validate_target_output(raw, expected_input=expected_input)
+    target_output = validate_target_output(
+        raw,
+        expected_input=expected_input,
+        expected_target_id=expected_target_id,
+    )
     if data != canonical_target_output_bytes(target_output):
         _fail("target_output", "must use canonical JSON with one trailing newline")
     return target_output

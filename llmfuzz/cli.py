@@ -21,6 +21,13 @@ from .redteam_generation import (
     GenerationResult,
     generate_and_persist_corpus,
 )
+from .redteam_run import (
+    TARGET_NAMES,
+    RedTeamRunError,
+    RedTeamRunValidationError,
+    canonical_run_cli_output,
+    run_accepted_corpus,
+)
 from .triage_dedup_v1 import triage_campaign_v1
 
 
@@ -326,6 +333,29 @@ def _handle_redteam_generate(args):
     return 0
 
 
+def _handle_redteam_run(args):
+    try:
+        result = run_accepted_corpus(
+            target=args.target,
+            output=args.output,
+            corpus_path=args.corpus,
+        )
+    except RedTeamRunValidationError as exc:
+        print(f"redteam run: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
+    except RedTeamRunError as exc:
+        print(f"redteam run: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except Exception:
+        print("redteam run: Red Team execution failed.", file=sys.stderr)
+        raise SystemExit(1) from None
+    if not result.completed:
+        print("redteam run: execution did not complete.", file=sys.stderr)
+        raise SystemExit(1)
+    print(canonical_run_cli_output(result))
+    return 0
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="llmfuzz")
     parser.add_argument("--version", action="version", version=_get_version())
@@ -412,6 +442,27 @@ def _build_parser():
         help=f"Maximum output tokens (1-{MAX_OUTPUT_TOKENS}; default: {MAX_OUTPUT_TOKENS})",
     )
     generate_parser.set_defaults(handler=_handle_redteam_generate)
+
+    redteam_run_parser = redteam_subparsers.add_parser(
+        "run",
+        help="Execute the accepted corpus against a deterministic demo target",
+    )
+    redteam_run_parser.add_argument(
+        "--target",
+        required=True,
+        choices=TARGET_NAMES,
+        help="Locked demo target policy",
+    )
+    redteam_run_parser.add_argument(
+        "--output",
+        required=True,
+        help="New Red Team execution output root",
+    )
+    redteam_run_parser.add_argument(
+        "--corpus",
+        help="Optional exact accepted corpus path",
+    )
+    redteam_run_parser.set_defaults(handler=_handle_redteam_run)
 
     return parser
 
