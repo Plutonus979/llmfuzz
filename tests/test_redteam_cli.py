@@ -191,6 +191,7 @@ def test_help_and_existing_commands_never_initialize_provider(
         "redteam",
     ):
         assert command in help_output
+    assert "--model" not in help_output
 
 
 def test_cli_creates_no_persistent_budget_state(
@@ -325,6 +326,7 @@ def test_success_uses_c2_persistence_and_prints_safe_evidence(
     }
     assert persisted.generation_metadata.token_usage is not None
     assert len(persisted.cases) == 16
+    assert request.model == generation.OPENAI_MODEL == "gpt-5.6-sol"
     assert request.max_output_tokens == MAX_OUTPUT_TOKENS
     schema = request.text_format["schema"]
     assert isinstance(schema, dict)

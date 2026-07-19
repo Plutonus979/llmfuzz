@@ -759,16 +759,11 @@ def test_actual_usage_cost_is_separate_from_reservation(tmp_path: Path) -> None:
     assert result.evidence.reserved_maximum_cost_usd > expected
 
 
-@pytest.mark.parametrize(
-    ("count", "model"),
-    [(12, OPENAI_MODEL), (12, "gpt-5.6-sol"), (20, "gpt-5.6-sol")],
-)
-def test_valid_response_persists_c1_verified_corpus(
-    tmp_path: Path, count: int, model: str
-) -> None:
+@pytest.mark.parametrize("count", [12, 20])
+def test_valid_response_persists_c1_verified_corpus(tmp_path: Path, count: int) -> None:
     result = _generate(
         tmp_path,
-        QueueProvider(_response(count=count, model=model)),
+        QueueProvider(_response(count=count, model=OPENAI_MODEL)),
         count=count,
     )
     loaded = load_corpus(result.path)
@@ -779,7 +774,7 @@ def test_valid_response_persists_c1_verified_corpus(
     assert len(loaded.cases) == count
     assert {case.attack_class for case in loaded.cases} == set(ATTACK_CLASSES)
     assert metadata.openai_response_id == "resp_synthetic_c2"
-    assert metadata.model == model
+    assert metadata.model == OPENAI_MODEL == "gpt-5.6-sol"
     assert metadata.prompt_sha256 == build_generation_prompt(count).sha256
     assert metadata.output_schema_version == CORPUS_SCHEMA_VERSION
     assert metadata.generation_timestamp == "2026-07-18T12:34:56Z"
@@ -1005,6 +1000,7 @@ def test_unexpected_provider_exception_has_no_raw_context(
     [
         (replace(_response(), response_id=None), "response_missing_id"),
         (replace(_response(), model=None), "response_missing_model"),
+        (_response(model="gpt-5.6"), "response_model_mismatch"),
         (_response(model="gpt-5.6-terra"), "response_model_mismatch"),
         (_response(model="gpt-5.6-luna"), "response_model_mismatch"),
         (_response(status="failed"), "response_status"),

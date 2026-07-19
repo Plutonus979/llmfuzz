@@ -137,7 +137,7 @@ mandatory operations and the generate/run/report order.
 ## 7. GPT-5.6 generation boundary
 
 - Provider and endpoint family: OpenAI Responses API.
-- Generation model: GPT-5.6.
+- Generation model: GPT-5.6 Sol; exact Responses API model ID: `gpt-5.6-sol`.
 - Response contract: Structured Outputs validated against the versioned corpus schema.
 - Case count and output tokens must be bounded before the request is made.
 - Generation must not occur implicitly from run, replay, report, or judge commands.
@@ -408,7 +408,7 @@ Preserve and later present:
 |---|---|
 | Product location | Extend the existing LLMFuzz repository; no new repository |
 | Primary provider | OpenAI only |
-| Generation model | GPT-5.6 only |
+| Generation model | GPT-5.6 Sol (`gpt-5.6-sol`) only |
 | API | OpenAI Responses API |
 | Generation contract | Structured Outputs plus strict local schema validation |
 | Final judge | Deterministic evaluator only |

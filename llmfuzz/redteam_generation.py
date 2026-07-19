@@ -26,7 +26,7 @@ from .redteam_corpus import (
 )
 
 
-OPENAI_MODEL = "gpt-5.6"
+OPENAI_MODEL = "gpt-5.6-sol"
 OUTPUT_SCHEMA_NAME = "llmfuzz_redteam_cases_v1"
 PROMPT_CONTRACT_VERSION = "llmfuzz.redteam.prompt.v1"
 
@@ -572,7 +572,7 @@ def _preflight_destination(path: str | os.PathLike[str]) -> Path:
 
 
 def _response_model_allowed(model: str) -> bool:
-    return model in {OPENAI_MODEL, "gpt-5.6-sol"}
+    return model == OPENAI_MODEL
 
 
 def _corpus_from_response(

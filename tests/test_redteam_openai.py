@@ -179,7 +179,7 @@ def test_adapter_sends_exact_responses_request_contract() -> None:
         "text",
         "tools",
     }
-    assert kwargs["model"] == "gpt-5.6"
+    assert kwargs["model"] == "gpt-5.6-sol"
     assert kwargs["max_output_tokens"] == 4096
     assert kwargs["prompt_cache_options"] == {"mode": "explicit"}
     assert kwargs["service_tier"] == "default"
