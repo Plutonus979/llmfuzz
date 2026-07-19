@@ -247,7 +247,7 @@ def _trusted_python_executable() -> Path:
         raise RedTeamRunValidationError("executable_invalid") from None
     if not stat.S_ISREG(executable_stat.st_mode) or not os.access(executable, os.X_OK):
         raise RedTeamRunValidationError("executable_invalid")
-    if executable_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+    if executable_stat.st_mode & stat.S_IWOTH:
         raise RedTeamRunValidationError("executable_invalid")
     return executable
 

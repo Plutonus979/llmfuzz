@@ -203,6 +203,128 @@ def test_d1b_public_literals_and_fixed_command_are_locked() -> None:
     assert os.access(executable, os.X_OK)
 
 
+@pytest.mark.parametrize("mode", (0o755, 0o775))
+def test_trusted_python_executable_accepts_regular_executable_modes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+) -> None:
+    executable = tmp_path / "python"
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(mode)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    assert redteam_run._trusted_python_executable() == executable.resolve(strict=True)
+
+
+def test_trusted_python_executable_rejects_world_writable_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "python"
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(0o777)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    with pytest.raises(RedTeamRunValidationError) as exc_info:
+        redteam_run._trusted_python_executable()
+
+    assert exc_info.value.code == "executable_invalid"
+    assert str(executable) not in str(exc_info.value)
+
+
+def test_trusted_python_executable_rejects_non_executable_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "python"
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(0o644)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    with pytest.raises(RedTeamRunValidationError) as exc_info:
+        redteam_run._trusted_python_executable()
+
+    assert exc_info.value.code == "executable_invalid"
+
+
+def test_trusted_python_executable_rejects_non_regular_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "python"
+    executable.mkdir(mode=0o755)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    with pytest.raises(RedTeamRunValidationError) as exc_info:
+        redteam_run._trusted_python_executable()
+
+    assert exc_info.value.code == "executable_invalid"
+
+
+def test_trusted_python_executable_sanitizes_resolution_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "missing-python"
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    with pytest.raises(RedTeamRunValidationError) as exc_info:
+        redteam_run._trusted_python_executable()
+
+    assert exc_info.value.code == "executable_invalid"
+    assert str(executable) not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+
+
+def test_trusted_python_executable_sanitizes_stat_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "python"
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(0o755)
+    resolved = executable.resolve(strict=True)
+    original_stat = Path.stat
+
+    def fail_selected_stat(path: Path, *args: object, **kwargs: object) -> os.stat_result:
+        if path == resolved:
+            raise OSError("nested sensitive failure")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(sys, "executable", str(executable))
+    monkeypatch.setattr(Path, "stat", fail_selected_stat)
+
+    with pytest.raises(RedTeamRunValidationError) as exc_info:
+        redteam_run._trusted_python_executable()
+
+    assert exc_info.value.code == "executable_invalid"
+    assert str(executable) not in str(exc_info.value)
+    assert "nested sensitive failure" not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+
+
+@pytest.mark.parametrize("target", ("fixed", "vulnerable"))
+def test_target_command_retains_locked_argv_with_group_writable_interpreter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+) -> None:
+    executable = tmp_path / "python"
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(0o775)
+    resolved = executable.resolve(strict=True)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    assert target_command(target) == (
+        str(resolved),
+        "-m",
+        "llmfuzz.redteam_target",
+        "--target",
+        target,
+    )
+
+
 def test_target_child_environment_is_minimal_and_does_not_inherit_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
