@@ -28,6 +28,12 @@ from .redteam_run import (
     canonical_run_cli_output,
     run_accepted_corpus,
 )
+from .redteam_reporting import (
+    RedTeamReportingError,
+    RedTeamReportingValidationError,
+    compare_persisted_runs,
+    report_persisted_run,
+)
 from .triage_dedup_v1 import triage_campaign_v1
 
 
@@ -356,6 +362,65 @@ def _handle_redteam_run(args):
     return 0
 
 
+def _handle_redteam_report(args):
+    if args.run is not None and args.fixed_run is not None:
+        args.report_parser.error("--run cannot be combined with --fixed-run")
+    if args.vulnerable_run is not None and args.fixed_run is None:
+        args.report_parser.error("--fixed-run is required with --vulnerable-run")
+
+    try:
+        if args.run is not None:
+            result = report_persisted_run(args.run, args.output)
+            output = {
+                "case_count": result.case_count,
+                "corpus_sha256": result.corpus_sha256,
+                "critical_failure_count": result.critical_failure_count,
+                "execution_id": result.execution_id,
+                "persisted_sha256": result.persisted_sha256,
+                "report": "llmfuzz/redteam-report.json",
+                "target_id": result.target_id,
+                "verdict_counts": dict(result.verdict_counts),
+            }
+        else:
+            result = compare_persisted_runs(
+                args.vulnerable_run,
+                args.fixed_run,
+                args.output,
+            )
+            output = {
+                "case_count": result.case_count,
+                "comparison": "llmfuzz/redteam-comparison.json",
+                "corpus_sha256": result.corpus_sha256,
+                "fixed_critical_failure_count": result.fixed_critical_failure_count,
+                "fixed_report": "llmfuzz/redteam-fixed-report.json",
+                "markdown": "llmfuzz/redteam-comparison.md",
+                "persisted_sha256": result.persisted_sha256,
+                "vulnerable_critical_failure_count": (
+                    result.vulnerable_critical_failure_count
+                ),
+                "vulnerable_report": "llmfuzz/redteam-vulnerable-report.json",
+            }
+    except RedTeamReportingValidationError as exc:
+        print(f"redteam report: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
+    except RedTeamReportingError as exc:
+        print(f"redteam report: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except Exception:
+        print("redteam report: Red Team reporting failed.", file=sys.stderr)
+        raise SystemExit(1) from None
+    print(
+        json.dumps(
+            output,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    )
+    return 0
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="llmfuzz")
     parser.add_argument("--version", action="version", version=_get_version())
@@ -463,6 +528,33 @@ def _build_parser():
         help="Optional exact accepted corpus path",
     )
     redteam_run_parser.set_defaults(handler=_handle_redteam_run)
+
+    redteam_report_parser = redteam_subparsers.add_parser(
+        "report",
+        help="Report deterministic Red Team evaluation results",
+    )
+    report_mode = redteam_report_parser.add_mutually_exclusive_group(required=True)
+    report_mode.add_argument(
+        "--run",
+        help="Validated Red Team run root for a single-run report",
+    )
+    report_mode.add_argument(
+        "--vulnerable-run",
+        help="Validated vulnerable Red Team run root",
+    )
+    redteam_report_parser.add_argument(
+        "--fixed-run",
+        help="Validated fixed Red Team run root",
+    )
+    redteam_report_parser.add_argument(
+        "--output",
+        required=True,
+        help="Red Team report output root",
+    )
+    redteam_report_parser.set_defaults(
+        handler=_handle_redteam_report,
+        report_parser=redteam_report_parser,
+    )
 
     return parser
 
